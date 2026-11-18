@@ -10,9 +10,9 @@ stack, including the interpreter, GTK and libtorrent.
     Python          3.14.10
     Twisted         26.10.0
     GTK             3.24.52 on GLib 2.90.1
-    Toolchain       clang 23 (MSYS2 CLANGARM64), Boost 1.92, OpenSSL 3.6.5
+    Toolchain       clang 23 (MSYS2 CLANGARM64), Boost 1.92, OpenSSL 4.1.0
 
-    Last updated 2026-11-13.
+    Last updated 2026-11-18.
 
 
 Running it
