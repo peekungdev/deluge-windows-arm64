@@ -1,0 +1,13 @@
+# Line endings are fixed here instead of being left to each machine's
+# core.autocrlf: MSYS2's bash cannot run a script with CRLF line endings, and
+# the build copies some of these files into the release unchanged, so every
+# clone has to check out the same bytes.
+* text=auto eol=lf
+
+# Read by people on Windows: shipped in the portable folder, and shown on the
+# installer's licence page.
+README-arm64-build.txt text eol=crlf
+installer/LICENSE.txt  text eol=crlf
+
+*.png binary
+*.ico binary

@@ -1,0 +1,28 @@
+Metadata-Version: 2.1
+Name: pywin32
+Version: 306
+Summary: Minimal ctypes stand-in for pywin32, supplying only what Deluge calls.
+Author: Deluge ARM64 bundle
+License: Same terms as the surrounding bundle
+Platform: win32
+
+This is NOT the real pywin32.
+
+MSYS2/MinGW CPython cannot load pywin32's binary extensions - they are built
+against the MSVC CPython ABI - and no win_arm64 wheel exists for this
+interpreter either. Deluge imports six pywin32 modules on Windows, and every
+call it makes is a thin wrapper over a documented Win32 API, so those calls are
+reimplemented with ctypes instead:
+
+  win32api      SetConsoleCtrlHandler, GetFileAttributes, GetLastError,
+                CloseHandle
+  win32con      CTRL_*_EVENT and FILE_ATTRIBUTE_* constants
+  win32event    CreateMutex
+  win32file     GetDiskFreeSpaceEx
+  win32process  EnumProcesses
+  winerror      ERROR_ALREADY_EXISTS and friends
+
+This distribution exists so that pkg_resources can satisfy Deluge's declared
+"pywin32; sys_platform == win32" requirement, which it resolves when loading UI
+entry points and when activating plugin eggs. Anything beyond the names listed
+above is absent - do not treat this as a general pywin32 replacement.

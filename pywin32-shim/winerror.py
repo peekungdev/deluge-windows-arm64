@@ -1,0 +1,7 @@
+"""Subset of pywin32's winerror used by Deluge."""
+
+ERROR_SUCCESS = 0
+ERROR_FILE_NOT_FOUND = 2
+ERROR_ACCESS_DENIED = 5
+ERROR_INVALID_HANDLE = 6
+ERROR_ALREADY_EXISTS = 183

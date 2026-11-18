@@ -1,0 +1,24 @@
+# Build output. Release files are attached to GitHub Releases instead.
+/dist/
+/build-lt/
+/prefix/
+
+# Upstream sources the scripts fetch: libtorrent (build-libtorrent.sh) and the
+# Deluge sdist (install-deluge.sh).
+/libtorrent-*/
+/deluge-[0-9]*/
+
+# A libtorrent 2.0.14 module kept locally for A/B test runs.
+/lt-2.0.14-pyd/
+
+# Test runs
+/testenv/
+/testsrc/
+/testresults/
+/magtest/seed/
+/magtest/magnet.txt
+/magtest/payload.sha256
+
+*.log
+__pycache__/
+*.pyc
