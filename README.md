@@ -31,9 +31,9 @@ Download from [Releases](https://github.com/peekungdev/deluge-windows-arm64/rele
 | `Deluge-2.2.0-arm64.zip` | Portable. Unzip anywhere and run `bin\Deluge.exe`. |
 | `deluge_2.2.0_arm64_setup.exe` | Installer. Installs to `Program Files\Deluge` and needs administrator rights. |
 
-The files are not code-signed, so Windows SmartScreen may warn the first time: choose
-**More info › Run anyway**. The installer program itself is 32-bit x86 (NSIS), which Windows on ARM runs
-under emulation; everything it installs is ARM64.
+The release notes list each file's SHA-256. The files are not code-signed, so Windows SmartScreen may
+warn the first time: choose **More info › Run anyway**. The installer program itself is 32-bit x86
+(NSIS), which Windows on ARM runs under emulation; everything it installs is ARM64.
 
 Programs in `bin\`:
 
@@ -41,7 +41,7 @@ Programs in `bin\`:
 | --- | --- |
 | `Deluge.exe` | The GTK client (this is the one you want) |
 | `deluged.exe` | The daemon, without a console window |
-| `deluge-web.exe` | The Web UI, at http://localhost:8112 |
+| `deluge-web.exe` | The Web UI, at `http://localhost:8112` |
 | `deluge-console.exe` | The console client |
 | `deluged-debug.exe`, `deluge-web-debug.exe` | The daemon and the Web UI with a console for log output |
 
@@ -50,6 +50,14 @@ else, for example next to a portable copy.
 
 ## Things to know
 
+- **If nothing ever connects, check the incoming port.** Windows reserves blocks of ports for Hyper-V,
+  WSL and Docker, and the blocks move at every restart; on a PC with those, a tenth or more of the range
+  Deluge picks its port from can be reserved. Deluge picks a random incoming port once and keeps it. If
+  a restart puts that port inside a reserved block, libtorrent cannot listen on it, and a session that
+  cannot listen makes no outgoing connections either, so nothing downloads at all.
+  `netsh int ipv4 show excludedportrange protocol=tcp` lists the reserved blocks. In **Preferences ›
+  Network › Incoming Port**, untick **Random** and choose a port outside them. This is how upstream
+  Deluge and libtorrent behave, not something this build adds.
 - **Hybrid torrents added from v1-only magnet links.** If a magnet link has only a v1 hash
   (`xt=urn:btih:...`) and the torrent turns out to be a v1+v2 hybrid, Deluge loses track of it when the
   metadata arrives: it still downloads and seeds, but Deluge keeps showing it as Downloading with no files.
@@ -103,6 +111,7 @@ cd deluge-windows-arm64
 ./build-libtorrent.sh   # libtorrent 2.1.2 and its Python module (a few minutes)
 ./install-deluge.sh     # dependencies, Deluge 2.2.0 and the patches
 ./deploy.sh             # the portable folder, in dist/
+python magtest/e2e.py dist/Deluge-2.2.0-arm64   # optional: check it end to end
 ```
 
 Then `makensis installer\deluge.nsi`, from any Windows shell, makes the installer in `dist\`.
@@ -132,12 +141,20 @@ byte-identical results.
   Run with the portable folder's own Python it gives the same result as with MSYS2's, with no failures,
   so nothing Deluge needs was left out of the folder.
 - `stage-tests.sh` and `run-core-tests.sh` run Deluge's own core tests against the patched Deluge: 119
-  pass. The one failure, `test_test_listen_port`, needs an outside server to reach this PC. Without the
-  libtorrent 2.1 patch, 64 of the tests error before they start.
-- `magtest/seeder.py` seeds files on this PC. Given only a magnet link, Deluge fetched the metadata,
-  downloaded the file with the same SHA-256 and then seeded it, shown live in the GTK thin client.
-- A fresh clone of this repository builds a portable folder that matches the release file for file,
-  apart from build-time stamps inside the libtorrent module and the plugin eggs.
+  pass. The one failure, `test_test_listen_port`, needs a server on the internet that can connect back
+  to the PC running the tests. Without the libtorrent 2.1 patch, 64 of the tests error before they start.
+- `magtest/e2e.py` checks a portable folder from end to end, with scratch settings so your own are never
+  touched. `magtest/seeder.py` seeds a random file on 127.0.0.1, the folder's own daemon is given only
+  a magnet link for it, and it has to fetch the metadata, download the file with the same SHA-256 and
+  seed it. Then the GTK client has to open its window and close again. It works on your own build or
+  on a downloaded release, from a checkout of this repository: `python magtest/e2e.py <portable folder>`.
+- Builds are reproducible. Two fresh clones of this repository, built in different folders on the same
+  MSYS2 installation, gave portable folders that are identical byte for byte except the ten plugin
+  eggs. Even those have identical contents, but Deluge's build stamps every file in an egg with the
+  time it was zipped, and pip's `RECORD` file lists the eggs' hashes. MSYS2 is a rolling distribution,
+  so building later picks up newer packages.
+
+The release files are one of those two builds, and they passed every check above.
 
 Not yet tested:
 

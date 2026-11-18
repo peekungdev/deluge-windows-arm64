@@ -23,6 +23,8 @@ import time
 
 import libtorrent as lt
 
+from freeport import free_tcp_udp_port
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 
 ap = argparse.ArgumentParser()
@@ -53,32 +55,57 @@ def make_torrent(path):
     return lt.torrent_info(ct.generate())
 
 
-# Port 0: let the OS pick. A fixed port (this used 51413, the classic
-# BitTorrent port) can land inside a range Hyper-V/WSL reserved at boot - the
-# ranges move every boot - and then libtorrent cannot listen at all, so the
-# test fails as "magnet never resolves" for a reason unrelated to Deluge.
-ses = lt.session({'listen_interfaces': '127.0.0.1:0', 'enable_dht': False,
-                  'enable_lsd': False, 'enable_upnp': False, 'enable_natpmp': False,
-                  # Every test peer is 127.0.0.1. With libtorrent's default of
-                  # one connection per IP, a peer that drops a torrent mid-
-                  # transfer (remove, re-add) leaves a stale connection that
-                  # makes the seeder refuse every new loopback peer for it.
-                  'allow_multiple_connections_per_ip': True,
-                  'alert_mask': lt.alert.category_t.error_notification
-                  | lt.alert.category_t.status_notification})
+# No listen_interfaces here: open_session() picks the port. A fixed one (this
+# used 51413, the classic BitTorrent port) can fall inside a range Windows
+# reserved at boot, and port 0 has its own problem, see below.
+SETTINGS = {'enable_dht': False,
+            'enable_lsd': False, 'enable_upnp': False, 'enable_natpmp': False,
+            # Every test peer is 127.0.0.1. With libtorrent's default of one
+            # connection per IP, a peer that drops a torrent mid-transfer
+            # (remove, re-add) leaves a stale connection that makes the seeder
+            # refuse every new loopback peer for it.
+            'allow_multiple_connections_per_ip': True,
+            'alert_mask': lt.alert.category_t.error_notification
+            | lt.alert.category_t.status_notification}
 
-# Do not hand out a magnet until the TCP listener really exists.
-PORT = None
-deadline = time.time() + 10
-while PORT is None and time.time() < deadline:
-    ses.wait_for_alert(500)
-    for a in ses.pop_alerts():
-        if isinstance(a, lt.listen_failed_alert):
-            sys.exit('seeder cannot listen: %s' % a.message())
-        if isinstance(a, lt.listen_succeeded_alert) and 'TCP' in a.message():
-            PORT = ses.listen_port()
-if not PORT:
-    sys.exit('seeder: no TCP listen_succeeded within 10 s')
+
+def open_session():
+    """Return (session, port) with TCP *and* uTP listening on that one port.
+
+    With port 0, libtorrent gets a free TCP port and then binds its uTP (UDP)
+    socket to the same number, which on Windows can be reserved or held by
+    another process - another libtorrent, for example. libtorrent then carries
+    on TCP-only, and Deluge's first dial, which libtorrent makes over uTP, can
+    reach whatever owns that UDP port instead. That counts as a failed peer:
+    libtorrent waits at least a minute before dialling it again, longer after
+    each failure, and gives up after three, so the magnet never resolves.
+    Hence a port checked free for both (freeport.py), and a magnet only once
+    both listeners really exist.
+    """
+    for attempt in range(1, 11):
+        port = free_tcp_udp_port()
+        ses = lt.session(dict(SETTINGS, listen_interfaces='127.0.0.1:%d' % port))
+        tcp = utp = failed = None
+        deadline = time.time() + 10
+        while time.time() < deadline and not failed and not (tcp and utp):
+            ses.wait_for_alert(500)
+            for a in ses.pop_alerts():
+                if isinstance(a, lt.listen_failed_alert):
+                    failed = a.message()
+                elif isinstance(a, lt.listen_succeeded_alert):
+                    if a.socket_type == lt.socket_type_t.tcp:
+                        tcp = a.port
+                    elif a.socket_type == lt.socket_type_t.utp:
+                        utp = a.port
+        if tcp == port and utp == port:
+            return ses, port
+        print('listen attempt %d: %s - trying another port'
+              % (attempt, failed or 'TCP on %s, uTP on %s' % (tcp, utp)), flush=True)
+        del ses
+    sys.exit('seeder: could not listen on 127.0.0.1 with both TCP and uTP')
+
+
+ses, PORT = open_session()
 
 handles, magnets = [], []
 for path in payloads:

@@ -18,6 +18,7 @@
 /magtest/seed/
 /magtest/magnet.txt
 /magtest/payload.sha256
+/magtest/e2e-work/
 
 *.log
 __pycache__/
