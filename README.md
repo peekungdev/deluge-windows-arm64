@@ -56,8 +56,11 @@ else, for example next to a portable copy.
   a restart puts that port inside a reserved block, libtorrent cannot listen on it, and a session that
   cannot listen makes no outgoing connections either, so nothing downloads at all.
   `netsh int ipv4 show excludedportrange protocol=tcp` lists the reserved blocks. In **Preferences ›
-  Network › Incoming Port**, untick **Random** and choose a port outside them. This is how upstream
-  Deluge and libtorrent behave, not something this build adds.
+  Network › Incoming Port**, untick **Random** and choose a port outside them. The daemon's own port,
+  58846 by default, can be caught the same way: `deluged` then stops with "listen port in use" even
+  though nothing uses it, and a thin client cannot connect. Set another **Daemon port** under
+  **Preferences › Daemon**, or `daemon_port` in `core.conf`. This is how upstream Deluge and libtorrent
+  behave, not something this build adds.
 - **Hybrid torrents added from v1-only magnet links.** If a magnet link has only a v1 hash
   (`xt=urn:btih:...`) and the torrent turns out to be a v1+v2 hybrid, Deluge loses track of it when the
   metadata arrives: it still downloads and seeds, but Deluge keeps showing it as Downloading with no files.

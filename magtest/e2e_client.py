@@ -1,8 +1,8 @@
 """Run by the portable folder's own Python, from magtest/e2e.py.
 
-    python e2e_client.py <localclient password> <magnet> <download dir>
+    python e2e_client.py <daemon port> <localclient password> <magnet> <download dir>
 
-Adds the magnet to the deluged on 127.0.0.1:58846, dials the seeder named in
+Adds the magnet to the deluged on 127.0.0.1:<daemon port>, dials the seeder named in
 the magnet's x.pe hint (Deluge ignores the hint), waits until the torrent is
 complete and seeding, then shuts the daemon down. Exit status 0 on success.
 """
@@ -13,7 +13,8 @@ from twisted.internet import defer, reactor, task
 
 from deluge.ui.client import client
 
-PW, MAGNET, DL = sys.argv[1:4]
+RPC = int(sys.argv[1])
+PW, MAGNET, DL = sys.argv[2:5]
 HOST, PORT = re.search(r'x\.pe=([^&:]+):(\d+)', MAGNET).groups()
 PORT = int(PORT)
 KEYS = ['name', 'state', 'total_size', 'progress', 'num_peers', 'is_finished']
@@ -23,7 +24,7 @@ result = {'ok': False}
 @defer.inlineCallbacks
 def main():
     try:
-        yield client.connect('127.0.0.1', 58846, 'localclient', PW)
+        yield client.connect('127.0.0.1', RPC, 'localclient', PW)
         version = yield client.daemon.get_version()
         lt_version = yield client.core.get_libtorrent_version()
         print('daemon: deluge %s, libtorrent %s' % (version, lt_version), flush=True)

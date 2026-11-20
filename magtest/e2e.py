@@ -20,9 +20,10 @@ __pycache__ into the folder. The steps:
    its main window, which appears on screen for a few seconds, and exit when
    that window is closed.
 
-Your own Deluge settings are never read or written. If something already
-listens on 127.0.0.1:58846 (a running Deluge daemon), the test refuses to
-start. Every process it starts is created suspended, put into a job object
+Your own Deluge settings are never read or written, and the test daemon does
+not use Deluge's default port 58846 (a running daemon may have it, or Windows
+may have reserved it, see write_core_conf). Every process it starts is
+created suspended, put into a job object
 with kill-on-close and only then resumed, so it can only ever stop processes
 it started itself.
 """
@@ -51,7 +52,6 @@ args = ap.parse_args()
 BUNDLE, WORK = os.path.abspath(args.bundle), os.path.abspath(args.work)
 BIN = os.path.join(BUNDLE, 'bin')
 PY = os.path.join(BIN, 'python.exe')
-RPC_PORT = 58846
 if not os.path.isfile(os.path.join(BIN, 'deluged-debug.exe')):
     sys.exit('%s does not look like a portable Deluge folder' % BUNDLE)
 
@@ -174,20 +174,22 @@ def wait_for(pred, timeout, step=0.3):
 
 
 def write_core_conf(cfg):
-    """A partial core.conf; Deluge fills in defaults for everything else.
+    """Write a partial core.conf (Deluge fills in the rest); return its daemon port.
 
-    The incoming port is pinned rather than left to Deluge, whose random port
-    can fall inside a range Windows reserved at boot. libtorrent then cannot
-    listen, and a session with no listen socket makes no outgoing connections
-    either, so the magnet could never resolve.
+    Both ports are picked here rather than left to Deluge. Windows reserves
+    blocks of ports at boot, and Deluge's random incoming port can land in one:
+    libtorrent then cannot listen, and a session with no listen socket makes no
+    outgoing connections either, so the magnet could never resolve. The same
+    goes for the daemon's fixed port 58846, which was reserved on 2026-11-20.
     """
-    port = free_tcp_udp_port()
+    port, rpc = free_tcp_udp_port(), free_tcp_udp_port()
     conf = dict(QUIET_CORE, random_port=False, listen_ports=[port, port],
-                listen_interface='127.0.0.1')
+                listen_interface='127.0.0.1', daemon_port=rpc)
     os.makedirs(cfg, exist_ok=True)
     with open(os.path.join(cfg, 'core.conf'), 'w') as fh:
         fh.write(json.dumps({'file': 1, 'format': 1}, indent=4))
         fh.write(json.dumps(conf, indent=4))
+    return rpc
 
 
 def sha256(path):
@@ -217,9 +219,6 @@ def find_window():
 
 
 def main():
-    if port_open(RPC_PORT):
-        sys.exit('127.0.0.1:%d is already in use (a running Deluge daemon?) - not touching it'
-                 % RPC_PORT)
     if os.path.isdir(WORK):
         shutil.rmtree(WORK)
     os.makedirs(WORK)
@@ -238,12 +237,12 @@ def main():
 
     # 2. daemon
     cfg = os.path.join(WORK, 'daemon-cfg')
-    write_core_conf(cfg)
+    rpc = write_core_conf(cfg)
     daemon = start([os.path.join(BIN, 'deluged-debug.exe'), '-c', cfg, '-L', 'info',
                     '-l', os.path.join(WORK, 'deluged.log')], os.path.join(WORK, 'deluged.out'))
     auth = os.path.join(cfg, 'auth')
-    if not check('deluged-debug.exe accepts connections on 127.0.0.1:%d' % RPC_PORT,
-                 wait_for(lambda: port_open(RPC_PORT) and os.path.exists(auth), 60)):
+    if not check('deluged-debug.exe accepts connections on 127.0.0.1:%d' % rpc,
+                 wait_for(lambda: port_open(rpc) and os.path.exists(auth), 60)):
         return
     with open(auth) as fh:
         pw = next(ln.split(':')[1] for ln in fh if ln.startswith('localclient:'))
@@ -252,7 +251,7 @@ def main():
     dl = os.path.join(WORK, 'downloads')
     os.makedirs(dl)
     clog = os.path.join(WORK, 'client.log')
-    client = start([PY, os.path.join(HERE, 'e2e_client.py'), pw, magnet, dl], clog)
+    client = start([PY, os.path.join(HERE, 'e2e_client.py'), str(rpc), pw, magnet, dl], clog)
     try:
         code = client.wait(240)
     except subprocess.TimeoutExpired:
