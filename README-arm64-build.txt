@@ -12,7 +12,7 @@ stack, including the interpreter, GTK and libtorrent.
     GTK             3.24.52 on GLib 2.90.1
     Toolchain       clang 23 (MSYS2 CLANGARM64), Boost 1.92, OpenSSL 4.1.0
 
-    Last updated 2026-11-18.
+    Last updated 2026-11-20.
 
 
 Running it
